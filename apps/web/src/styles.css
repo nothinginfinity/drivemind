@@ -74,6 +74,43 @@ textarea {
   padding: 10px;
 }
 
+/* File browser cards */
+.file-card {
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.file-card:hover {
+  border-color: #4a5568;
+  background: #222a38;
+}
+
+.file-card--selected {
+  border-color: #4f98a3 !important;
+  background: #182028 !important;
+  box-shadow: 0 0 0 1px #4f98a3;
+}
+
+.file-card--selected strong {
+  color: #7ec8d4;
+}
+
+.file-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.file-tag {
+  font-size: 10px;
+  background: #1a2236;
+  border: 1px solid #2a3550;
+  border-radius: 6px;
+  padding: 1px 6px;
+  color: #6b7280;
+}
+
 /* Search results */
 .search-results {
   margin-top: 10px;
@@ -96,6 +133,19 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.search-result-card:hover {
+  border-color: #4a5568;
+  background: #13181f;
+}
+
+.search-result-card--active {
+  border-color: #4f98a3 !important;
+  background: #0d1a20 !important;
+  box-shadow: 0 0 0 1px #4f98a3;
 }
 
 .result-name {

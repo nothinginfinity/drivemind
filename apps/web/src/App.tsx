@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { DriveConnectPanel } from "./components/DriveConnectPanel";
 import { FileBrowser } from "./components/FileBrowser";
 import { SearchPanel } from "./components/SearchPanel";
 import { ChatPanel } from "./components/ChatPanel";
 
 export function App() {
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -16,11 +19,17 @@ export function App() {
       <section className="layout">
         <aside className="left-panel">
           <DriveConnectPanel />
-          <SearchPanel />
+          <SearchPanel
+            selectedFileId={selectedFileId}
+            onSelect={setSelectedFileId}
+          />
         </aside>
 
         <section className="center-panel">
-          <FileBrowser />
+          <FileBrowser
+            selectedFileId={selectedFileId}
+            onSelect={setSelectedFileId}
+          />
         </section>
 
         <aside className="right-panel">
