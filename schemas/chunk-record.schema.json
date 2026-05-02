@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DriveMind Chunk Record",
+  "type": "object",
+  "required": ["chunk_id", "file_id", "chunk_index", "text"],
+  "properties": {
+    "chunk_id": { "type": "string" },
+    "file_id": { "type": "string" },
+    "chunk_index": { "type": "integer" },
+    "text": { "type": "string" },
+    "token_estimate": { "type": "integer" },
+    "sha256": { "type": ["string", "null"] }
+  }
+}

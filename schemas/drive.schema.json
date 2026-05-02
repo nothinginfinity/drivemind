@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DriveMind Drive",
+  "type": "object",
+  "required": ["drive_id", "name", "created_at"],
+  "properties": {
+    "drive_id": { "type": "string" },
+    "name": { "type": "string" },
+    "root_label": { "type": "string" },
+    "created_at": { "type": "string" },
+    "last_indexed_at": { "type": ["string", "null"] },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "file_count": { "type": "integer" },
+        "indexed_text_files": { "type": "integer" },
+        "total_size_bytes": { "type": "integer" }
+      }
+    }
+  }
+}

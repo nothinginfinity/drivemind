@@ -1,0 +1,26 @@
+{
+  "name": "drivemind",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first LLM file explorer for external drives connected to iPhone.",
+  "scripts": {
+    "dev:web": "pnpm --filter @drivemind/web dev",
+    "build:web": "pnpm --filter @drivemind/web build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "keywords": [
+    "llm",
+    "ios",
+    "external-drive",
+    "local-first",
+    "file-search",
+    "pwa",
+    "sqlite",
+    "ai-filesystem"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

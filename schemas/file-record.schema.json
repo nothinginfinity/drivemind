@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DriveMind File Record",
+  "type": "object",
+  "required": ["file_id", "drive_id", "path", "name", "size_bytes", "indexed_status"],
+  "properties": {
+    "file_id": { "type": "string" },
+    "drive_id": { "type": "string" },
+    "path": { "type": "string" },
+    "name": { "type": "string" },
+    "extension": { "type": ["string", "null"] },
+    "mime": { "type": ["string", "null"] },
+    "size_bytes": { "type": "integer" },
+    "modified_at": { "type": ["string", "null"] },
+    "sha256": { "type": ["string", "null"] },
+    "indexed_status": {
+      "type": "string",
+      "enum": ["pending", "indexed_metadata", "indexed_text", "skipped_binary", "skipped_too_large", "error"]
+    },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  }
+}

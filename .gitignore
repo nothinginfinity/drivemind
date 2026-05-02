@@ -1,0 +1,19 @@
+node_modules
+dist
+build
+.DS_Store
+.env
+.env.local
+*.log
+
+# iOS
+DerivedData
+*.xcworkspace/xcuserdata
+*.xcodeproj/xcuserdata
+*.xcuserstate
+
+# local DriveMind data
+.drivemind-local
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
