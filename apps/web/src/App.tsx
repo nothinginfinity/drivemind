@@ -3,9 +3,14 @@ import { DriveConnectPanel } from "./components/DriveConnectPanel";
 import { FileBrowser } from "./components/FileBrowser";
 import { SearchPanel } from "./components/SearchPanel";
 import { ChatPanel } from "./components/ChatPanel";
+import { mockFiles } from "./lib/mockData";
 
 export function App() {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+
+  const selectedFile = selectedFileId
+    ? mockFiles.find((f) => f.file_id === selectedFileId) ?? null
+    : null;
 
   return (
     <main className="app-shell">
@@ -33,7 +38,10 @@ export function App() {
         </section>
 
         <aside className="right-panel">
-          <ChatPanel />
+          <ChatPanel
+            selectedFile={selectedFile}
+            onClearFile={() => setSelectedFileId(null)}
+          />
         </aside>
       </section>
     </main>
