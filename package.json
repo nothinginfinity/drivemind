@@ -2,6 +2,7 @@
   "name": "drivemind",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.0.0",
   "description": "A local-first LLM file explorer for external drives connected to iPhone.",
   "scripts": {
     "dev:web": "pnpm --filter @drivemind/web dev",
