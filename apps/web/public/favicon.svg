@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Drive cylinder base -->
+  <rect x="4" y="10" width="24" height="14" rx="4" fill="#4f98a3"/>
+  <!-- Drive slot -->
+  <rect x="8" y="15" width="10" height="2" rx="1" fill="#0f1115" opacity="0.5"/>
+  <!-- Activity light -->
+  <circle cx="22" cy="16" r="2" fill="#7ec8d4"/>
+  <!-- Connector top -->
+  <rect x="12" y="6" width="8" height="5" rx="2" fill="#2a3a42"/>
+</svg>
