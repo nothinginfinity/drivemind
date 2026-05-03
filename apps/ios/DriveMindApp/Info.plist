@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>DriveMind</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.nothinginfinity.drivemind</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <!-- Allow access to files the user explicitly opens -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <!-- Allow the app to open files in-place from external drives -->
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+    <!-- Required for WKWebView local file access in production -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!-- Allow localhost for Vite dev server in DEBUG builds -->
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+</dict>
+</plist>
