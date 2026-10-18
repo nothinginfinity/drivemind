@@ -1,803 +1,115 @@
-# DriveMind MCP Bridge Spec
+# DriveMind MCP Bridge — Relay-First MVP Contract
 
-**status:** proposed
-**version:** 0.1
-**created:** 2026-05-24
-**project:** DriveMind
-**doctrine:** local-first, mobile-first, user-approved access
+**Status:** proposed R0001 documentation candidate, 2026-10-18; not live or accepted implementation.
+**Review inputs:** Claude AC1 `msg:drivemind-r0001-review-claude-20261018`, Grok AC1 `msg:drivemind-r0001-review-grok-20261018`, both reviewed PR #1 at `0ec49ba01ccf8cead78e3de4ed46121fdd0cadc1`.
+**Authority:** [ROADMAP](../ROADMAP.md) for milestone gates; [ARCHITECTURE](ARCHITECTURE.md) for system layers. Previous v0.1 chat/web-style spec is archived at [legacy design](archive/drivemind-mcp-bridge-v0.1-legacy.md) for reference **only**; no legacy tools, payloads, app UI or phases are MVP requirements.
 
----
+## 1. Core capability
 
-> **2026-10-18 relay-first scope amendment (proposed; not yet accepted):** DriveMind's MVP is a minimal SwiftUI iPhone permission-holder + authenticated remote MCP gateway with optional MCP Apps in-chat UI. Existing LLM applications remain the chat client. The rest of this v0.1 document includes historical web-style UI and in-app LLM chat ideas; those are **not MVP requirements**. See [ROADMAP.md](../ROADMAP.md) and [ARCHITECTURE.md](ARCHITECTURE.md) for the current review candidate.
->
-> **Transport note:** iOS background suspension prevents guaranteeing a continuously reachable live phone MCP server. Initial remote acceptance uses explicitly approved, expiring gateway packets, accurately labeled as snapshots. Live phone pull/queue relay is feasibility-gated separately. `ui://` MCP Apps UI is host-dependent; clients without UI support use normal tool outputs. A tool request is never permission to read or upload an arbitrary local file. No native chat screen is required.
+**Existing AI app** (ChatGPT/Claude/Grok or other verified MCP client) <-> **authenticated HTTPS DriveMind MCP gateway** <-> **explicitly approved expiring packet** from the **minimal native iPhone SSD companion**.
 
-## 0. Product Position
+- iPhone native code owns folder-picker grants, scoped filesystem traversal, bounded file reads, local approval and optional later SQLite search.
+- The remote Worker **cannot browse the SSD**. It serves only explicitly released packets at R3. Never present an approved snapshot as live drive access.
+- iOS background suspension makes a continuously reachable native server unproven. A live request queue/relay is separate R5 feasibility work, **NO-GO until physical device tests**.
+- MCP Apps interactive `ui://` resources are an optional host capability, **not** the remote MCP tool protocol and **not** a way around iOS file permissions. MVP works with tool-only outputs. Check client installation web/mobile and actual iPhone tool exposure independently.
+- **No second LLM chat client, BYOK AI provider, React/WebView dependency, broad cloud sync or autonomous file writes in MVP.**
 
-DriveMind is **not** a cloud sync project.
+## 2. Three independently testable proof steps
 
-DriveMind is a local-first intelligence layer for external drives connected to iPhone.
+**R1a — device only, no network.** On a physical iPhone with a real USB-C SSD, open the native picker, select a root, read and locally display a bounded text excerpt. Record OS/app/drive/power/filesystem conditions; exercise replug, re-grant, bookmark restore failure, app switch, suspend/resume and disconnect. Never silently restore invalid root access.
 
-The goal is to let Jared plug a SanDisk or other USB-C external SSD into an iPhone, grant folder access, locally index the drive, search it, build context packets, and use ChatGPT, Claude, or other LLMs to discuss and organize the data without uploading the whole drive to a cloud provider.
+**R1b — authorized packet transfer, no MCP dependency.** User reviews an excerpt and explicitly approves its scope and destination; companion uploads a bounded packet via HTTPS to a test Worker using a **sandbox-only developer token**. Assert persisted bytes/provenance, expiration, delete/revoke and unauthorized request denial. Never ship shared static dev-token authentication as production auth.
 
-Core flow:
+**R1c — MCP, no live phone needed.** Connect one supported existing AI host to the Worker. Independently test tools/list, auth, one approved packet read returning exact approved bytes and citation, unauthenticated/other-principal denial, and revocation/expiry. Record **where connector can be installed** (web vs iPhone), whether it is exposed to the iPhone chat, OAuth outcome and MCP Apps `ui://` support (separate). A working desktop/web host does **not** prove mobile acceptance.
 
-```txt
-External SSD
-  ↓
-iPhone native file access
-  ↓
-DriveMind local SQLite index
-  ↓
-Search / browse / select / summarize
-  ↓
-User-approved context packet
-  ↓
-ChatGPT / Claude / other LLM
-```
+These are independently testable. A failure in one cannot be hidden by success in another.
 
-The MCP bridge should expose controlled capabilities over a local index, not raw unfettered filesystem access.
+## 3. Initial bounded policy (proposed R1 values; adjust only with tests)
 
----
+| Boundary | Initial rule |
+| --- | --- |
+| Per selected text excerpt | **16,384 UTF-8 bytes max** |
+| Entire released packet, serialized incl. metadata | **65,536 UTF-8 bytes max** |
+| Release TTL | **1 hour default**, **24 hours absolute maximum** |
+| Initial file type allowlist | `.txt`, `.md`, `.json`, `.csv`, `.log` |
+| Root access | One explicitly selected iOS security-scoped root, no symlink escape |
+| Network transport | HTTPS only; authenticated principal + scoped packet grant |
+| Server reads | Bounded approved IDs and content budgets only; no raw filesystem paths |
+| Remote mutation | None: **no** scan, write, delete/move, persistent background process |
+| Upload | No whole-drive upload, no automatic folder sync |
+| Storage | Encrypted at rest where backed by supported platform security, HTTPS in transit; **not end-to-end encrypted** if Worker decrypts/serves to MCP |
 
-## 1. iPhone Native Shell Responsibilities
+Count **bytes**, not characters. Reject over-budget inputs; do not truncate silently in a way that changes source provenance. File eligibility is based on detected safe text content as well as extension; reject binary, secret and unsupported types. These values are test defaults, not claims of proven safe handling.
 
-A pure PWA is not enough on iPhone because Safari cannot reliably traverse an external drive. DriveMind should start as:
+## 4. Principal binding and consent
 
-```txt
-Native iOS shell + web-style UI
-```
+Define distinct actors and credentials:
 
-The iOS shell is responsible for everything that requires native file access, security-scoped resources, and local persistence.
+1. **Native companion / device**: securely pairs with a specific DriveMind owner account; registration/refresh credentials stored in iOS Keychain. Device session is separate from the LLM client's token.
+2. **Existing AI client**: independently authenticates to the HTTPS MCP gateway (OAuth-compatible host flow when supported). Gateway validates token issuer, signature, audience, expiry and maps its subject/client binding to the DriveMind owner; no anonymous or shared cross-tenant token. Record per-client iPhone compatibility.
+3. **User's release grant**: after a native preview, the owner explicitly chooses a bounded packet, audience/authorized client principal, expiry and release action. A grant is bound to **owner + packet_id + intended client principal + scopes + expiry**; it is checked at every tool read, is revocable, and grants no broader drive access.
+4. **Server policy**: enforce tenant isolation and device/client/grant separation, replay/idempotency controls on upload and approval, rotating credentials, TLS, audit metadata without storing packet contents in logs; return deny for mismatched subject or audience.
 
-### Responsibilities
+**R1b may use a temporary local dev token only for isolated test deployment**; R3 must implement production-quality client OAuth/pairing validation or stop at auth gate. An MCP tool call is **never** implicit authorization to expand the file set, trigger a drive scan or upload data. Approval cannot be initiated or completed through a tool response in R3; native user action precedes each new release.
 
-1. **Drive/folder connection**
-   - Present iOS document/folder picker.
-   - Let the user choose an external drive root or specific folder.
-   - Store security-scoped bookmark references where allowed.
-   - Revalidate access on app launch.
+Revocation blocks **future gateway reads**. It cannot recall content already delivered into an LLM conversation or captured by the provider. Say this in the UI and documentation.
 
-2. **Permission lifecycle**
-   - Show which folders are currently connected.
-   - Let the user revoke/disconnect a drive.
-   - Never scan outside user-selected locations.
+## 5. Uniform source and availability fields
 
-3. **Filesystem traversal**
-   - Recursively list files and folders under approved roots.
-   - Track path, relative path, filename, extension, size, modified time, and directory status.
-   - Respect hidden/system file exclusions by default.
+`source_mode` is one of **`approved_snapshot`**, **`live_verified`** (not available in initial R3), **`local_only`**. This describes provenance, *not* device reachability. Separately, `connection_status` is **`reachable`**, **`offline`**, **`pending`**, or **`unknown`**. Never mix these enums.
 
-4. **Local indexing**
-   - Maintain a local SQLite database on the iPhone.
-   - Store file metadata, text chunks, search index, summaries, tags, and manifest records.
-   - Support incremental re-indexing.
+Packets carry `packet_id`, `owner_id` (server-only), `grant_id` (opaque), `source_revision`, `source_modified_at` where available, `captured_at`, `expires_at`, bounded non-sensitive relative path label, file/chunk opaque IDs and `source_mode:approved_snapshot`. They **never** carry a security-scoped bookmark, absolute root path, bearer token or the impression of online live drive access. `drive_status` must report the last **observed** native status and its observation timestamp separately from available packet snapshots; do not infer `reachable` just because a packet exists.
 
-5. **Text extraction**
-   - Read text-like files locally.
-   - Chunk large files.
-   - Store extracted text snippets locally.
-   - Defer OCR and heavy media processing to later phases.
+## 6. Exactly four remote MCP tools for R3
 
-6. **Local bridge to UI / MCP layer**
-   - Expose a safe bridge from native code to the web-style UI.
-   - Optionally expose a local MCP-compatible endpoint only while the app is open and the user enables it.
-   - Prefer app-mediated context export over persistent background server behavior.
+All require validated principal and released-packet grant. Inputs never accept arbitrary local paths or raw drive IDs that imply fresh file access.
 
-7. **User approval gates**
-   - Require explicit user action before sending any file contents or snippets to an LLM.
-   - Show exactly which files/snippets are included in a context packet.
+| Tool | Initial behavior |
+| --- | --- |
+| `drive_status` | Authenticated status/capability: available approved packet IDs, source/connection state, observation/freshness and TTL. No live-connection claim from cache. |
+| `search_files` | Search **only the caller's approved packet text/metadata**, no device scan. `{packet_id,query,limit}`; bounded results/citations. |
+| `read_file_chunks` | Read **only explicitly granted** `{packet_id,chunk_ids,max_bytes}`; source label/version, exact bounded text. Opaque IDs, fail closed. |
+| `build_context_packet` | Assemble/return subsets of an **already approved** packet only: `{packet_id,chunk_ids,max_bytes}`. May not start an on-device approval, expand authorization or fetch new local files. |
 
-8. **No autonomous file mutation in MVP**
-   - No delete, move, rename, or write operations in MVP.
-   - Organization suggestions are allowed; autonomous modifications are not.
+**Native-only actions** are user-controlled Connect Drive, bounded file enumeration/read, Refresh Connection (root/permission revalidation, no background indexing in R2), preview/select/release, revoke. **Later**: SQLite/FTS indexing (R4), live queued requests (R5), optional project vault/manifest (R6). Legacy `browse_folder(path)`, remote `scan_drive`, `summarize_selected_files`, manifest and cloud-promotion tools are **not** authorized MVP endpoints.
 
----
-
-## 2. Local SQLite Schema
-
-The local SQLite database is the DriveMind source of truth for connected drives, indexed files, chunks, search, context packets, and manifests.
-
-### `drives`
-
-```sql
-CREATE TABLE drives (
-  id TEXT PRIMARY KEY,
-  display_name TEXT NOT NULL,
-  root_bookmark_id TEXT,
-  root_display_path TEXT,
-  connected_at TEXT NOT NULL,
-  last_seen_at TEXT,
-  last_scan_at TEXT,
-  status TEXT NOT NULL DEFAULT 'connected',
-  metadata_json TEXT
-);
-```
-
-### `files`
-
-```sql
-CREATE TABLE files (
-  id TEXT PRIMARY KEY,
-  drive_id TEXT NOT NULL,
-  relative_path TEXT NOT NULL,
-  filename TEXT NOT NULL,
-  extension TEXT,
-  mime_type TEXT,
-  size_bytes INTEGER,
-  modified_at TEXT,
-  is_directory INTEGER NOT NULL DEFAULT 0,
-  partial_hash TEXT,
-  scan_status TEXT NOT NULL DEFAULT 'pending',
-  text_status TEXT NOT NULL DEFAULT 'not_extracted',
-  summary_status TEXT NOT NULL DEFAULT 'not_summarized',
-  tags_json TEXT,
-  metadata_json TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(drive_id, relative_path)
-);
-```
-
-### `file_chunks`
-
-```sql
-CREATE TABLE file_chunks (
-  id TEXT PRIMARY KEY,
-  file_id TEXT NOT NULL,
-  drive_id TEXT NOT NULL,
-  chunk_index INTEGER NOT NULL,
-  start_offset INTEGER,
-  end_offset INTEGER,
-  text TEXT NOT NULL,
-  token_estimate INTEGER,
-  created_at TEXT NOT NULL,
-  UNIQUE(file_id, chunk_index)
-);
-```
-
-### `file_search_fts`
-
-Use SQLite FTS5 for local content search.
-
-```sql
-CREATE VIRTUAL TABLE file_search_fts USING fts5(
-  file_id UNINDEXED,
-  drive_id UNINDEXED,
-  relative_path,
-  filename,
-  text
-);
-```
-
-### `summaries`
-
-```sql
-CREATE TABLE summaries (
-  id TEXT PRIMARY KEY,
-  target_type TEXT NOT NULL,
-  target_id TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  model TEXT,
-  created_at TEXT NOT NULL,
-  metadata_json TEXT
-);
-```
-
-### `context_packets`
-
-```sql
-CREATE TABLE context_packets (
-  id TEXT PRIMARY KEY,
-  title TEXT,
-  question TEXT,
-  packet_json TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  exported_at TEXT,
-  metadata_json TEXT
-);
-```
-
-### `manifests`
-
-```sql
-CREATE TABLE manifests (
-  id TEXT PRIMARY KEY,
-  drive_id TEXT NOT NULL,
-  manifest_json TEXT NOT NULL,
-  compressed_size_bytes INTEGER,
-  created_at TEXT NOT NULL,
-  metadata_json TEXT
-);
-```
-
-### Suggested indexes
-
-```sql
-CREATE INDEX idx_files_drive_path ON files(drive_id, relative_path);
-CREATE INDEX idx_files_extension ON files(extension);
-CREATE INDEX idx_files_modified ON files(modified_at);
-CREATE INDEX idx_chunks_file ON file_chunks(file_id, chunk_index);
-CREATE INDEX idx_context_packets_created ON context_packets(created_at);
-```
-
----
-
-## 3. MCP Tool List
-
-The MCP bridge should start read-only and user-approved. It should expose search, browse, read-snippet, context-packet, and manifest tools.
-
-### Tool: `drive_status`
-
-Return app, index, and bridge status.
-
-Inputs: none.
-
-Outputs:
+Example tool data (illustrative; not a live receipt):
 
 ```json
 {
-  "app": "DriveMind",
-  "bridge": "ready",
-  "drives_connected": 1,
-  "indexed_files": 1200,
-  "text_chunks": 6400
-}
-```
-
-### Tool: `list_drives`
-
-List approved connected/indexed drives.
-
-Inputs:
-
-```json
-{}
-```
-
-Outputs:
-
-```json
-{
-  "drives": [
-    {
-      "id": "drv_sandisk_1tb",
-      "display_name": "SanDisk 1TB",
-      "status": "connected",
-      "last_scan_at": "2026-05-24T00:00:00Z"
-    }
-  ]
-}
-```
-
-### Tool: `scan_drive`
-
-Start or resume local indexing for a selected drive.
-
-Inputs:
-
-```json
-{
-  "drive_id": "drv_sandisk_1tb",
-  "mode": "metadata_only | text_files | incremental",
-  "max_files": 1000
-}
-```
-
-Outputs:
-
-```json
-{
-  "scan_started": true,
-  "drive_id": "drv_sandisk_1tb",
-  "mode": "incremental"
-}
-```
-
-MVP note: scanning may be app-mediated and not long-running in background.
-
-### Tool: `browse_folder`
-
-Browse indexed folder contents.
-
-Inputs:
-
-```json
-{
-  "drive_id": "drv_sandisk_1tb",
-  "path": "Projects/AFO",
-  "limit": 100
-}
-```
-
-### Tool: `search_files`
-
-Search filenames and content through SQLite metadata + FTS.
-
-Inputs:
-
-```json
-{
-  "drive_id": "drv_sandisk_1tb",
-  "query": "AFO Toolsmith belt system",
-  "limit": 20,
-  "file_types": ["md", "txt", "json"]
-}
-```
-
-Outputs should include file path, snippet, score/rank, modified date, and size.
-
-### Tool: `get_file_metadata`
-
-Return metadata for a selected indexed file.
-
-Inputs:
-
-```json
-{
-  "file_id": "file_abc123"
-}
-```
-
-### Tool: `read_file_chunks`
-
-Read selected chunks from a file. This is safer than raw full-file reads.
-
-Inputs:
-
-```json
-{
-  "file_id": "file_abc123",
-  "chunk_ids": ["chunk_1", "chunk_2"],
-  "max_chars": 12000
-}
-```
-
-### Tool: `build_context_packet`
-
-Build a user-reviewable context packet from search results, selected files, selected chunks, and a question.
-
-Inputs:
-
-```json
-{
-  "question": "What should I do with these AFO project files?",
-  "drive_id": "drv_sandisk_1tb",
-  "file_ids": ["file_abc123"],
-  "chunk_ids": ["chunk_1", "chunk_2"],
-  "max_chars": 30000
-}
-```
-
-### Tool: `summarize_selected_files`
-
-Summarize selected files using user-approved snippets and the user's configured LLM provider.
-
-Inputs:
-
-```json
-{
-  "file_ids": ["file_abc123", "file_def456"],
-  "style": "brief | detailed | action_items"
-}
-```
-
-### Tool: `generate_drive_manifest`
-
-Generate a portable, compressed drive map.
-
-Inputs:
-
-```json
-{
-  "drive_id": "drv_sandisk_1tb",
-  "include_summaries": true,
-  "include_hashes": true,
-  "include_chunks": false
-}
-```
-
-### Tool: `export_context_packet`
-
-Export a context packet for use in ChatGPT, Claude, or another client.
-
-Inputs:
-
-```json
-{
-  "packet_id": "ctx_abc123",
-  "format": "markdown | json"
-}
-```
-
----
-
-## 4. Context Packet Format
-
-Context packets are the safe bridge between the local external drive and an LLM.
-
-They should be explicit, bounded, reviewable, and cite local file paths.
-
-### JSON format
-
-```json
-{
-  "schema": "drivemind.context_packet.v1",
-  "id": "ctx_abc123",
-  "created_at": "2026-05-24T00:00:00Z",
-  "question": "What project files are related to AFO Toolsmith?",
-  "drive": {
-    "id": "drv_sandisk_1tb",
-    "display_name": "SanDisk 1TB"
-  },
-  "limits": {
-    "max_chars": 30000,
-    "snippets": 12
-  },
+  "source_mode": "approved_snapshot",
+  "connection_status": "unknown",
+  "packet_id": "pkt_example",
+  "source_revision": "sha256-of-approved-source-version",
+  "captured_at": "2026-10-18T15:00:00Z",
+  "expires_at": "2026-10-18T16:00:00Z",
   "sources": [
     {
-      "file_id": "file_abc123",
-      "relative_path": "Projects/AFO/README.md",
-      "filename": "README.md",
-      "modified_at": "2026-05-01T12:00:00Z",
-      "snippets": [
-        {
-          "chunk_id": "chunk_1",
-          "text": "DriveMind is a local-first...",
-          "start_offset": 0,
-          "end_offset": 800
-        }
-      ]
-    }
-  ],
-  "instructions": [
-    "Use only the supplied context packet unless the user asks for outside knowledge.",
-    "Cite local file paths when making claims about drive contents.",
-    "Do not assume access to the full drive."
-  ]
-}
-```
-
-### Markdown format
-
-```md
-# DriveMind Context Packet
-
-Question: What project files are related to AFO Toolsmith?
-Drive: SanDisk 1TB
-
-## Source: Projects/AFO/README.md
-file_id: file_abc123
-modified_at: 2026-05-01T12:00:00Z
-
-> snippet text here
-
-## Instructions for LLM
-
-- Use only this context packet for claims about the drive.
-- Cite local file paths.
-- Ask for more context if needed.
-```
-
----
-
-## 5. Manifest Format
-
-The manifest is a portable map of the drive. It should be much smaller than the drive itself and safe to export/share if the user approves.
-
-### JSON format
-
-```json
-{
-  "schema": "drivemind.drive_manifest.v1",
-  "id": "manifest_abc123",
-  "created_at": "2026-05-24T00:00:00Z",
-  "drive": {
-    "id": "drv_sandisk_1tb",
-    "display_name": "SanDisk 1TB"
-  },
-  "stats": {
-    "file_count": 1200,
-    "folder_count": 80,
-    "total_size_bytes": 734003200000,
-    "indexed_text_files": 420,
-    "text_chunks": 6400
-  },
-  "file_types": {
-    "md": 120,
-    "txt": 80,
-    "json": 60,
-    "jpg": 300,
-    "mp4": 40
-  },
-  "top_folders": [
-    {
-      "path": "Projects/AFO",
-      "file_count": 240,
-      "size_bytes": 1200000000
-    }
-  ],
-  "files": [
-    {
-      "id": "file_abc123",
-      "relative_path": "Projects/AFO/README.md",
-      "extension": "md",
-      "size_bytes": 12000,
-      "modified_at": "2026-05-01T12:00:00Z",
-      "partial_hash": "sha256:...",
-      "summary": "Optional short local/LLM summary"
+      "file_id": "opaque_file_1",
+      "chunk_id": "opaque_chunk_1",
+      "relative_path_label": "Projects/Notes/example.md",
+      "text": "User-approved excerpt only",
+      "untrusted_source_content": true
     }
   ]
 }
 ```
 
-### Compression
+## 7. Untrusted file data and prompt-injection boundary
 
-Support:
+File contents, filename text, embedded Markdown/JSON, metadata and snippets are **untrusted data**, not system/developer instructions, not executable commands and not evidence that an agent may invoke its other tools. Do not include an `instructions` field inside context packets or an "Instructions for LLM" block in exported content. Return source bytes in typed fields with explicit untrusted labels; keep gateway/tool rules outside file content. Don't execute commands from files or let content grant itself access/exfiltrate to another tool. AI hosts must apply their own higher-priority policies and tool authorizations.
 
-```txt
-manifest.json
-manifest.json.gz
-```
+If secrets are detected or files are likely sensitive, warn and require deliberate review before release; warn that a previously delivered snippet remains in provider context even after deletion.
 
-Do not include full file contents in default manifests.
+## 8. Physical iPhone and host matrix; application distribution
 
----
+Record iPhone model/iOS build, SSD/vendor, cable/adapter and power, Files-visible filesystem format, selected root, bookmark revalidation after unplug/replug, suspend/resume, permission revoke/re-grant, bounded read, size rejection, approved packet upload, per-client connection, web-only vs mobile connector availability, actual iPhone tool visibility, MCP Apps in-chat UI support, expiry and revocation tests. **Do not assume NTFS readability, power sufficiency or bookmark longevity; test real hardware.**
 
-## 6. Privacy and Safety Rules
+**App Store considerations (non-legal/non-approval guarantee):** Native companion offers real on-device local value (connect, browse/preview, status, consent/revoke); prepare clear review notes and physical-device demonstration for optional external SSD workflow. Check current Apple rules, filesystem permission requirements and any hardware/accessory program requirements against authoritative documentation before asserting exemption or App Store acceptance. Privacy disclosures must reflect real released data/network paths, not merely the default local mode.
 
-1. **Local-first by default**
-   - The external drive is not uploaded wholesale.
-   - Indexing happens locally on the iPhone.
+## 9. Stop conditions and provenance
 
-2. **User-approved context only**
-   - The user must approve file contents/snippets before they are sent to an LLM.
-   - The app should show the context packet before export/send.
-
-3. **Read-only MVP**
-   - No delete, move, rename, write, or cleanup automation in MVP.
-   - Organization suggestions are allowed.
-
-4. **Least context principle**
-   - Send the smallest useful snippets, not whole folders.
-   - Ask for approval before increasing context size.
-
-5. **Path citation**
-   - LLM answers should cite local file paths and chunk references.
-
-6. **No hidden full-drive access**
-   - LLMs should not be told they can access the whole drive.
-   - They only see the context packet or tool-returned snippets.
-
-7. **Sensitive file warnings**
-   - Detect likely sensitive extensions or folders where possible.
-   - Warn before including secrets, keys, backups, financial, medical, or identity documents.
-
-8. **Provider transparency**
-   - If snippets are sent to an external LLM provider, show which provider is used.
-   - Support user-provided API keys only after explicit configuration.
-
-9. **Offline usefulness**
-   - Browsing, indexing, metadata search, and manifest viewing should work without internet.
-
-10. **No cloud sync positioning**
-   - DriveMind is not Dropbox, iCloud Drive, Google Drive, or cloud backup.
-   - It is a local intelligence layer over user-owned storage.
-
----
-
-## 7. MVP Build Order
-
-### Phase A — UI and mock index
-
-Goal: validate the interaction model before native file access.
-
-Deliverables:
-
-- Drive dashboard
-- Mock connected drive
-- Mock folder browser
-- Mock search results
-- Context packet preview
-- Manifest preview
-
-Success criteria:
-
-- User can browse fake drive contents.
-- User can search mock records.
-- User can build a mock context packet.
-
-### Phase B — iOS native shell
-
-Goal: get real folder access on iPhone.
-
-Deliverables:
-
-- Swift iOS shell
-- Web-style UI container
-- Folder picker
-- Security-scoped folder access
-- Native-to-web bridge
-
-Success criteria:
-
-- User can select a folder/external drive.
-- Native code can list selected folder contents.
-- UI can display real files.
-
-### Phase C — local SQLite index
-
-Goal: persist metadata locally.
-
-Deliverables:
-
-- SQLite database
-- `drives` and `files` tables
-- recursive metadata scan
-- incremental re-scan
-
-Success criteria:
-
-- Indexed file list persists between app launches.
-- Modified/new files are detected.
-
-### Phase D — text extraction and FTS
-
-Goal: make text-like drive contents searchable.
-
-First file types:
-
-```txt
-.txt .md .json .jsonl .csv .html .xml
-.js .ts .py .swift .sql .log .yaml .toml
-```
-
-Deliverables:
-
-- text extractor
-- chunker
-- `file_chunks`
-- SQLite FTS5 search
-- snippet cards
-
-Success criteria:
-
-- User can search inside files.
-- Results show path and snippet.
-- User can inspect selected chunks.
-
-### Phase E — context packets
-
-Goal: create user-approved context for LLMs.
-
-Deliverables:
-
-- `build_context_packet`
-- context packet preview
-- Markdown export
-- JSON export
-- selected snippets only
-
-Success criteria:
-
-- User can ask a question.
-- DriveMind retrieves local snippets.
-- User approves packet.
-- Packet can be pasted/sent to ChatGPT or Claude.
-
-### Phase F — MCP bridge
-
-Goal: expose controlled DriveMind tools to compatible clients.
-
-Deliverables:
-
-- MCP-compatible tool endpoint or app-mediated bridge
-- `drive_status`
-- `list_drives`
-- `search_files`
-- `read_file_chunks`
-- `build_context_packet`
-- `generate_drive_manifest`
-
-Success criteria:
-
-- An LLM client can request search/read/context operations through DriveMind.
-- User remains in control of what content is released.
-
-### Phase G — LLM chat over drive
-
-Goal: answer questions over selected local context.
-
-Deliverables:
-
-- provider settings
-- user-provided API key support
-- retrieval-before-generation flow
-- answer with local path citations
-
-Success criteria:
-
-- User can ask: “What AFO files are on this drive?”
-- DriveMind searches locally.
-- LLM answer cites local paths from the context packet.
-
-### Later phases
-
-Do not start here:
-
-- OCR for all images
-- embeddings for every file
-- autonomous cleanup
-- cloud sync
-- background indexing while app is closed
-- phone-to-phone sync
-- write/delete/move operations
-
-These come after the local-first read/search/context loop is solid.
-
----
-
-## 8. Workcell Placement
-
-DriveMind belongs in a future workcell:
-
-```txt
-Personal Knowledge Workcell
-```
-
-Suggested belt:
-
-```txt
-Comms Spine
-+ DriveMind MCP
-+ Vector Lab MCP
-+ Toolsmith Admin MCP
-+ Google Drive MCP later
-```
-
-Primary use cases:
-
-- discuss data on an external SSD
-- search old project archives
-- organize files by topic
-- generate compressed drive manifests
-- prepare context packets for Claude or ChatGPT
-- reason over local knowledge without uploading the entire drive
-
----
-
-## 9. Missing Tool Request
-
-```md
-## Missing Tool Request: drivemind-mcp
-
-**Problem:**
-LLMs cannot safely access an external SSD connected to an iPhone. Cloud MCPs cannot directly read the local drive, and iOS web apps cannot reliably traverse external drive directories.
-
-**Needed capability:**
-A local-first iPhone DriveMind bridge that indexes an approved external drive/folder locally and exposes user-approved search, chunk-read, context-packet, and manifest tools.
-
-**Inputs:**
-- drive_id: selected approved drive
-- query: search question or keywords
-- file_ids: selected file IDs
-- chunk_ids: selected chunk IDs
-- max_chars: context budget
-
-**Outputs:**
-- search results with local paths and snippets
-- selected file/chunk metadata
-- context packets
-- compressed drive manifests
-
-**Safety / risk:**
-local-private / user-approved-readonly
-
-**Belongs in belt/workcell:**
-Personal Knowledge Workcell, Research + Spec Workcell, Full Project Ops Workcell.
-
-**Success criteria:**
-Jared can plug in a SanDisk external SSD, index/search it from iPhone, build a context packet, and discuss selected drive content with ChatGPT/Claude without uploading the entire drive.
-```
-
----
+- Do not merge this PR, deploy a Worker, promote accepted CairnStone path/chain HEADs, or claim iPhone/MCP live success from docs alone.
+- Physical iPhone/SSD R1a, HTTPS upload R1b and external client MCP R1c each require distinct evidence; evidence from one does not establish another.
+- Live request relay stays **NO-GO** until real suspension, reachability, token/consent and expiry tests pass.
+- Historical May 2026 v0.1 spec remains versioned only in [archive](archive/drivemind-mcp-bridge-v0.1-legacy.md). No legacy `instructions` payload, remotely triggered scanning, chat client or path-based browsing may be copied into the R3 build.
