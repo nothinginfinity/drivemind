@@ -1,465 +1,53 @@
-# DriveMind
+# DriveMind — The MCP Bridge for Your iPhone's External Drive
 
-> **Direction update — 2026-10-18 (review candidate):** DriveMind is a **thin native SSD permission companion + scoped MCP capability**, not a second LLM chat app. The user interacts primarily inside ChatGPT/Claude/Grok through ordinary MCP tools and, where a client supports it, an **MCP App inline interface**. The first working slice is a single **user-approved, expiring SSD excerpt** retrieved from an authenticated MCP gateway with correct source provenance; unrestricted live iPhone reads are **not** assumed because of iOS background suspension. The full app dashboard/chat concepts below are historical scaffolding, not first-build requirements. See [relay-first roadmap](ROADMAP.md) and [architecture](docs/ARCHITECTURE.md).
+**Status:** Relay-first architecture proposal on [draft PR #1](https://github.com/nothinginfinity/drivemind/pull/1). No functional iPhone application or remotely accessible DriveMind MCP service has passed live acceptance.
 
+DriveMind is the missing local-storage capability inside existing AI apps. It lets a user connect an external SSD to their iPhone, approve specific snippets or context, and retrieve that content through a scoped **MCP connector in ChatGPT, Claude, Grok or another compatible host**. DriveMind is **not a replacement chat client**, universal file-sync product or cloud backup.
 
-DriveMind is a **local-first LLM file explorer for external drives connected to iPhone**.
+## The small product
 
-It turns an external SSD, such as a SanDisk 1TB drive, into a searchable, conversational, MCP-accessible knowledge base.
-
-DriveMind is **not cloud sync**. It is not Dropbox, iCloud Drive, Google Drive, or cloud backup. DriveMind is a local intelligence layer over user-owned storage, with an optional temporary AI cloud workspace for selected files/snippets only.
-
----
-
-## The clearest architecture
-
-DriveMind has two modes:
-
-```txt
-1. Local Mode
-   External SSD + iPhone app + local SQLite index.
-   Private, local-first, offline-capable, user-controlled.
-
-2. Temp Cloud / Project Vault Mode
-   User-selected files/snippets/manifests promoted into Cloudflare.
-   Fast MCP access through R2 + D1 + Vectorize.
-   Temporary by default, persistent only if the user chooses.
+```text
+USB-C SSD -> minimal native SwiftUI iPhone companion
+              [Connect / Preview / Status / Access Controls]
+           -> human-approved, expiring context packet
+           -> authenticated HTTPS Cloudflare MCP gateway
+           -> existing ChatGPT / Claude / Grok conversation
+              (optional inline MCP App UI where verified supported)
 ```
 
-The important part: DriveMind does **not** upload the whole external drive by default.
+The **iPhone companion** alone holds iOS permission to the user-selected folder. A Cloudflare Worker cannot read that SSD directly. The first remote capability is an **approved snapshot**, not continuous live filesystem access. Ordinary iOS app suspension makes an always-on local phone relay unreliable; a separate live mode remains gated by physical-device evidence.
 
-It lets the user search locally first, then promote only the useful working set into an AI-accessible workspace.
+**MCP tools**, **MCP Apps interactive UI** and **native iOS drive permissions** are distinct. The initial MCP tools work without any in-chat widget. Validate actual connector setup and exposure independently in each AI provider's iPhone client; web support does not guarantee mobile support.
 
----
+## First useful proof — three independent tests
 
-## The most important architecture point
+1. **iPhone only:** with a real USB-C SSD, select a folder in Files, preview/read **one** bounded text excerpt locally; handle unsupported file systems, power, unplug/replug, bookmark failure and re-grant. No network required for this first test.
+2. **HTTPS packet:** explicitly approve the excerpt/audience and upload only those bytes to a short-lived test Worker. Developer-token auth is allowed only in an isolated test environment. Confirm storage, expiry, revoke and denial.
+3. **MCP in an existing AI app:** connect an authenticated client to the gateway; call a tool to read the already approved packet with accurate path label, capture timestamp and citation. Test iPhone app separately and prove expired/unauthorized clients cannot read.
 
-DriveMind is **not just a hosted MCP server**.
+**Initial proposed limits:** 16 KiB per excerpt, 64 KiB total serialized packet, 1 hour default TTL, 24 hours maximum; a small safe-text allowlist. These are R1 test defaults and must be revised with evidence if necessary.
 
-A normal hosted MCP connector works for services that already live online, like GitHub or Cloudflare. An external SSD plugged into an iPhone is different: the cloud cannot see the physical drive.
+## Native companion and MCP tools
 
-So DriveMind needs two pieces for direct drive access:
+The first companion should be **SwiftUI** and minimal: **Connect Drive**, **Refresh Connection** (revalidate permission/listing; not full indexing), **Connection Status**, and **Access Controls** (preview/release/revoke). SQLite/FTS indexing comes **after** the first authenticated end-to-end packet works. Existing React/WKWebView scaffolding in `apps/web` and `apps/ios` is historical/experimental, not a build dependency or proof of live acceptance.
 
-```txt
-1. DriveMind iPhone app
-   - gets permission to read the external SSD
-   - indexes/searches the drive locally
-   - builds context packets
-   - uploads selected working sets only when approved
+**Exactly four initial remote tools:** `drive_status`, `search_files`, `read_file_chunks`, `build_context_packet`. These operate **only within an already user-approved packet**. Remote clients cannot pass arbitrary file paths, trigger scans, request unapproved files or start silent uploads. `build_context_packet` can assemble only preapproved chunks and cannot itself authorize a new release.
 
-2. DriveMind MCP bridge
-   - exposes controlled tools to ChatGPT, Claude, and other LLMs
-   - talks to local/app-mediated data or Temp Cloud workspaces
-   - returns user-approved search results, snippets, manifests, and context packets
-```
+Tool data distinguishes provenance `source_mode` (`approved_snapshot`, `live_verified`, `local_only`) from reachability `connection_status` (`reachable`, `offline`, `pending`, `unknown`). No live mode is implemented or accepted yet.
 
-The simple user experience should feel like:
+## Privacy and permissions
 
-```txt
-Install DriveMind
-→ plug in external SSD
-→ tap Connect Drive
-→ index locally
-→ search the drive
-→ select what matters
-→ optionally promote selected data to Temp Cloud
-→ add DriveMind MCP URL to ChatGPT/Claude
-→ ask questions and work with the data
-```
+- The user chooses the authorized iOS folder root. Reads are bounded and confined to that root; no symlink escapes, arbitrary paths or full-drive upload.
+- User previews the exact released content and selects a recipient/audience. Gateway authenticates the owner and client and checks a revocable grant bound to **packet + owner + client principal + expiry** for every read.
+- HTTPS and encrypted-at-rest storage do **not** mean end-to-end encryption when the gateway can read/serve the packet.
+- Revocation blocks **future** gateway access; it **cannot erase data already read or retained by an AI provider**.
+- Text read from a file is **untrusted source data**, not instructions for the AI agent or authorization for tool execution.
+- Temp Cloud/project vault retention, OCR, Vectorize/embeddings, unrestricted live relay, autonomous file edits, BYOK chat UI and automated sync are **not first-build requirements**.
 
-Under the hood, the iPhone app is what has actual access to the drive. The cloud workspace only has what the user selected.
+## Build gates and source of truth
 
----
+The [Roadmap](ROADMAP.md) defines R0 documentation review, R1a device proof, R1b approved upload, R1c authenticated MCP/client test, R2 minimal companion, R3 production gateway, R4 SQLite/FTS and later optional UI/live relay/vault. [Architecture](docs/ARCHITECTURE.md) defines layers, and the [MCP Bridge Contract](docs/drivemind-mcp-bridge.spec.md) defines precise initial tool/auth/security behavior. The [historical v0.1 bridge spec](docs/archive/drivemind-mcp-bridge-v0.1-legacy.md) is archived **not authoritative for MVP**.
 
-## Core local flow
+CairnStone chain `drivemind` records accepted source/history; canonical C0000 START HERE stays intact until owner-reviewed acceptance. A docs commit/PR is **not** permission to merge, deploy, modify files on an SSD, or claim working mobile MCP integration.
 
-```txt
-External SSD
-  ↓
-iPhone native file access
-  ↓
-DriveMind local SQLite index
-  ↓
-Search / browse / summarize / manifest
-  ↓
-User-approved context packet
-  ↓
-ChatGPT / Claude / other LLM via MCP
-```
-
-This is the private local-first path. It is the foundation.
-
----
-
-## Optional Temp Cloud flow
-
-The Temp Cloud flow is for when the user wants ChatGPT, Claude, or another LLM to work quickly with selected data while the phone/drive may not remain constantly connected.
-
-```txt
-Search local SSD
-  ↓
-Select files / folders / snippets / manifest
-  ↓
-Upload selected working set only
-  ↓
-Cloudflare workspace
-  - R2: original selected files / exported packets
-  - D1: metadata, file records, chunks, job state
-  - Vectorize: semantic index
-  - SQL / FTS-style search where useful
-  ↓
-DriveMind MCP URL
-  ↓
-ChatGPT / Claude can search, retrieve, summarize, and organize selected data
-  ↓
-User chooses:
-  - delete temp workspace
-  - keep as project vault
-  - download changed artifacts
-  - move important data into permanent databases
-```
-
-This makes DriveMind feel like a normal hosted MCP connector once the user has promoted a working set.
-
----
-
-## Three product modes
-
-### Local Mode
-
-```txt
-Private
-Offline-capable
-iPhone + external SSD
-Local SQLite + FTS
-Context packets
-No cloud required
-```
-
-Use when:
-
-- browsing the drive
-- scanning metadata
-- searching text files locally
-- building context packets
-- deciding what is worth promoting
-
-### Temp Cloud Mode
-
-```txt
-Selected upload only
-Cloudflare R2 + D1 + Vectorize
-Fast MCP access
-Expires/deletes by default
-```
-
-Use when:
-
-- ChatGPT/Claude needs faster access to selected project data
-- the user wants a temporary AI workspace
-- the phone/drive connection should not be required for every query
-- the user wants semantic search over selected files/snippets
-
-### Project Vault Mode
-
-```txt
-User chooses to keep it
-Persistent project workspace
-Longer-term Cloudflare knowledge base
-LLM-accessible through MCP
-```
-
-Use when:
-
-- a temp workspace becomes important
-- files belong to an ongoing project
-- the user wants a durable AI-accessible knowledge base
-
----
-
-## Why this exists
-
-External drives can hold huge amounts of useful personal data, but phones do not provide a good AI-native way to explore them.
-
-DriveMind makes an external SSD feel searchable, conversational, and organized without uploading the entire drive to a cloud provider.
-
-Use cases:
-
-- Ask what is on a 1TB external drive.
-- Search old project archives from iPhone.
-- Find files related to AFO, Toolsmith, code, notes, screenshots, or documents.
-- Generate a compressed drive manifest.
-- Build a context packet for ChatGPT or Claude.
-- Promote selected folders into a temporary Cloudflare AI workspace.
-- Discuss selected local or temporary-cloud files with an LLM.
-- Get organization suggestions without letting an agent modify files automatically.
-
----
-
-## First target
-
-The first personal target is:
-
-```txt
-iPhone + external USB-C SSD + local index + context packets
-```
-
-The second target is:
-
-```txt
-selected working set → Cloudflare Temp Cloud → MCP connector
-```
-
-The initial version should use:
-
-- iOS native file/folder access
-- local SQLite indexing
-- local full-text search
-- a web-style app interface
-- user-approved context packets
-- selected upload to Cloudflare only when approved
-- R2 + D1 + Vectorize for temp/project workspaces
-- selective context sending to LLMs
-
----
-
-## Important iPhone constraint
-
-A pure PWA is not enough on iPhone because iOS Safari does not provide reliable full external-drive directory traversal for a web app.
-
-DriveMind should start as:
-
-```txt
-Native iOS shell + web-style UI
-```
-
-The native shell handles:
-
-- external drive/folder picker
-- security-scoped file access
-- recursive file listing
-- local SQLite database
-- text extraction
-- local indexing
-- selected upload to Temp Cloud
-- bridge between native code and UI/MCP layer
-
-The web-style UI handles:
-
-- drive dashboard
-- folder browser
-- search
-- file cards
-- local/temp/project mode controls
-- context packet preview
-- manifest preview
-- temp cloud workspace preview
-- chat/context workflow
-
----
-
-## What the MCP does
-
-The MCP connector should not give an LLM blanket access to the whole hard drive.
-
-Instead, it should expose safe, user-approved tools like:
-
-```txt
-drive_status
-list_drives
-scan_drive
-browse_folder
-search_files
-get_file_metadata
-read_file_chunks
-build_context_packet
-summarize_selected_files
-generate_drive_manifest
-promote_to_temp_cloud
-list_temp_workspaces
-search_workspace
-read_workspace_chunks
-export_workspace_changes
-delete_temp_workspace
-```
-
-Good LLM behavior:
-
-```txt
-Search for AFO project files.
-Return top snippets.
-Build a context packet from this folder.
-Promote these 20 selected files into a temp workspace.
-Search the project vault semantically.
-Summarize this selected file.
-Generate a manifest.
-```
-
-Bad MVP behavior:
-
-```txt
-Read my entire hard drive.
-Upload my whole SSD automatically.
-Delete duplicate files automatically.
-Move these folders around without approval.
-Keep temp data forever by default.
-```
-
----
-
-## Cloudflare workspace shape
-
-A promoted DriveMind workspace should use:
-
-```txt
-R2
-- selected source files
-- exported context packets
-- manifests
-- generated summaries/artifacts
-
-D1
-- workspace metadata
-- file records
-- chunk records
-- source/local path mapping
-- upload jobs
-- retention/expiration state
-- LLM action logs
-
-Vectorize
-- embeddings for selected chunks
-- semantic search over the working set
-
-Workers
-- DriveMind MCP endpoint
-- upload/session endpoints
-- workspace search/retrieval tools
-```
-
-Default retention:
-
-```txt
-Temp workspace: expires by default
-Project vault: user explicitly chooses to keep
-```
-
----
-
-## MVP 0.1
-
-DriveMind MVP 0.1 should support:
-
-- Connect an external drive/folder from iPhone.
-- Recursively scan file metadata.
-- Index text-like files.
-- Search by filename and file contents.
-- Read selected file chunks.
-- Build a user-reviewable context packet.
-- Ask an LLM questions using retrieved local snippets.
-- Summarize selected files.
-- Generate a compressed drive manifest.
-
-## MVP 0.2
-
-DriveMind MVP 0.2 should support:
-
-- Create a Temp Cloud workspace.
-- Upload selected files/snippets/manifests only.
-- Store selected files in R2.
-- Store metadata/chunks in D1.
-- Embed selected chunks into Vectorize.
-- Provide a DriveMind workspace MCP URL.
-- Delete/export/keep the workspace.
-
----
-
-## Non-goals for MVP
-
-Do not start with:
-
-- cloud sync
-- automatic full-drive upload
-- Bluetooth sync
-- Wi-Fi phone-to-phone transfer
-- full OCR for every image
-- embeddings for every file on the full SSD
-- autonomous file modification
-- background indexing while app is closed
-- delete/move/rename/write tools
-- keeping temp workspaces forever by default
-
-Those are future layers, if needed.
-
----
-
-## Product phrase
-
-```txt
-DriveMind turns an external drive into an MCP-accessible local knowledge base.
-```
-
-Expanded:
-
-```txt
-DriveMind lets you search your external drive locally, then promote selected data into a temporary AI cloud workspace when you want LLMs to work fast.
-```
-
-Precise architecture:
-
-```txt
-External SSD + iPhone app + local index + optional Cloudflare workspace + MCP bridge
-= private portable knowledge base for LLMs.
-```
-
----
-
-## Workcell fit
-
-DriveMind belongs in a future:
-
-```txt
-Personal Knowledge Workcell
-```
-
-Suggested belt:
-
-```txt
-Comms Spine
-+ DriveMind MCP
-+ Vector Lab MCP
-+ Toolsmith Admin MCP
-+ Google Drive MCP later
-```
-
-This lets ChatGPT, Claude, or another LLM work with user-approved local drive context and selected cloud workspaces while preserving project comms, memory, and safety.
-
----
-
-## Docs
-
-Important docs:
-
-- `docs/drivemind-mcp-bridge.spec.md` — MCP bridge, SQLite schema, context packets, manifest format, privacy model, MVP build order.
-- `docs/drivemind-app.html.spec` — simple app UI spec for the iPhone native shell + web-style interface.
-- `docs/ARCHITECTURE.md` — architecture notes.
-- `docs/DRIVE_INDEX_SCHEMA.md` — drive index schema notes.
-- `docs/IOS_FILE_ACCESS.md` — iOS file access notes.
-- `docs/LLM_TOOLING.md` — LLM tooling notes.
-- `docs/SECURITY_MODEL.md` — security model.
-
----
-
-## Future direction
-
-DriveMind can become the root layer for:
-
-- CausalVault recipe-based storage
-- local-first personal memory systems
-- AI-native external drive organization
-- compressed manifest exchange
-- topic clustering
-- duplicate detection
-- local model support
-- semantic search after the read/search/context loop is solid
-- temporary and persistent Cloudflare project vaults
+The first success is **one user-approved SSD excerpt correctly retrieved in an existing AI chat**.
