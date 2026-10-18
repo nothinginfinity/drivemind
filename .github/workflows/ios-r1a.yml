@@ -1,0 +1,31 @@
+name: DriveMind R1a iOS unsigned compile
+on:
+  pull_request:
+    paths:
+      - "apps/ios/DriveMindR1a/**"
+      - ".github/workflows/ios-r1a.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios-simulator:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate isolated Xcode project
+        run: xcodegen generate --spec apps/ios/DriveMindR1a/project.yml --project apps/ios/DriveMindR1a
+      - name: Compile unsigned iPhone simulator app
+        run: |
+          xcodebuild -project apps/ios/DriveMindR1a/DriveMindR1a.xcodeproj \
+            -scheme DriveMindR1a \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DriveMindR1aDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
