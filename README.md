@@ -1,5 +1,8 @@
 # DriveMind
 
+> **Direction update — 2026-10-18 (review candidate):** DriveMind is a **thin native SSD permission companion + scoped MCP capability**, not a second LLM chat app. The user interacts primarily inside ChatGPT/Claude/Grok through ordinary MCP tools and, where a client supports it, an **MCP App inline interface**. The first working slice is a single **user-approved, expiring SSD excerpt** retrieved from an authenticated MCP gateway with correct source provenance; unrestricted live iPhone reads are **not** assumed because of iOS background suspension. The full app dashboard/chat concepts below are historical scaffolding, not first-build requirements. See [relay-first roadmap](ROADMAP.md) and [architecture](docs/ARCHITECTURE.md).
+
+
 DriveMind is a **local-first LLM file explorer for external drives connected to iPhone**.
 
 It turns an external SSD, such as a SanDisk 1TB drive, into a searchable, conversational, MCP-accessible knowledge base.
