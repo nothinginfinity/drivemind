@@ -8,6 +8,10 @@
 
 ---
 
+> **2026-10-18 relay-first scope amendment (proposed; not yet accepted):** DriveMind's MVP is a minimal SwiftUI iPhone permission-holder + authenticated remote MCP gateway with optional MCP Apps in-chat UI. Existing LLM applications remain the chat client. The rest of this v0.1 document includes historical web-style UI and in-app LLM chat ideas; those are **not MVP requirements**. See [ROADMAP.md](../ROADMAP.md) and [ARCHITECTURE.md](ARCHITECTURE.md) for the current review candidate.
+>
+> **Transport note:** iOS background suspension prevents guaranteeing a continuously reachable live phone MCP server. Initial remote acceptance uses explicitly approved, expiring gateway packets, accurately labeled as snapshots. Live phone pull/queue relay is feasibility-gated separately. `ui://` MCP Apps UI is host-dependent; clients without UI support use normal tool outputs. A tool request is never permission to read or upload an arbitrary local file. No native chat screen is required.
+
 ## 0. Product Position
 
 DriveMind is **not** a cloud sync project.
